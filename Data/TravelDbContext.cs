@@ -12,6 +12,8 @@ namespace api_my_web.Data
 
         public DbSet<Destination> Destinations { get; set; }
 
+        
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Destination>()

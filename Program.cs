@@ -12,6 +12,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<TravelDbContext>(options =>
     options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
 
+// Register the DestinationService
+builder.Services.AddScoped<DestinationService>();
+
 // CORS configuration
 builder.Services.AddCors(options =>
 {
@@ -39,10 +42,9 @@ app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 
 // API endpoints
-app.MapGet("/travel/{name}/{language}", async (string name, string language, TravelDbContext db) =>
+app.MapGet("/travel/{name}/{language}", async (string name, string language, DestinationService destinationService) =>
 {
-    var destination = await db.Destinations
-        .FirstOrDefaultAsync(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    var destination = destinationService.GetDestinationByName(name);
 
     if (destination == null)
     {
