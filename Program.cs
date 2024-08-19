@@ -1,10 +1,18 @@
+using api_my_web.Models;
+using api_my_web.Data;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.SqlServer;
+
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CORS'yi yapılandır
+// Configure DbContext
+builder.Services.AddDbContext<TravelDbContext>(options =>
+    options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
+
+// CORS configuration
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -16,13 +24,11 @@ builder.Services.AddCors(options =>
         });
 });
 
-// Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -30,24 +36,19 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// CORS'i uygulama boru hattına ekleyin
 app.UseCors("AllowAll");
 
 // API endpoints
-
-// 1. Travel endpoint
-app.MapGet("/travel/{name}/{language}", (string name, string language) =>
+app.MapGet("/travel/{name}/{language}", async (string name, string language, TravelDbContext db) =>
 {
-    var destination = DataStore.Destinations
-        .FirstOrDefault(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    var destination = await db.Destinations
+        .FirstOrDefaultAsync(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     if (destination == null)
     {
         return Results.NotFound(new { Message = "Destination not found." });
     }
 
-    // Rastgele bir ücret oluşturma
     Random random = new Random();
     int minCost = random.Next(500, 5000);
 
@@ -65,25 +66,21 @@ app.MapGet("/travel/{name}/{language}", (string name, string language) =>
 .WithName("GetDestination")
 .WithOpenApi();
 
-// 2. Cities endpoint
-app.MapGet("/cities", () =>
+app.MapGet("/cities", async (TravelDbContext db) =>
 {
-    var cities = DataStore.Destinations
+    var cities = await db.Destinations
         .Select(d => d.Name)
         .Distinct()
-        .OrderBy(name => name) // Şehirleri alfabetik sıraya göre sırala
-        .ToList();
+        .OrderBy(name => name)
+        .ToListAsync();
 
     return Results.Ok(cities);
 })
 .WithName("GetCities")
 .WithOpenApi();
 
-// 3. Add Destination endpoint
-app.MapPost("/destinations", ([FromBody] Destination newDestination) =>
+app.MapPost("/destinations", async ([FromBody] Destination newDestination, TravelDbContext db) =>
 {
-    // Validation
-    // Gerekli doğrulamaları yapın
     if (string.IsNullOrWhiteSpace(newDestination.Name))
     {
         return Results.BadRequest(new { Message = "Name is required." });
@@ -105,21 +102,19 @@ app.MapPost("/destinations", ([FromBody] Destination newDestination) =>
         return Results.BadRequest(new { Message = "Local dishes are required." });
     }
 
-        // Şehir zaten mevcut mu kontrolü
-    if (DataStore.Destinations.Any(d => d.Name.ToLower() == newDestination.Name.ToLower()))
+    if (await db.Destinations.AnyAsync(d => d.Name.ToLower() == newDestination.Name.ToLower()))
     {
         return Results.BadRequest(new { Message = "Eklemeye çalıştığınız şehir zaten listede mevcut." });
     }
 
-    // Yeni şehri listeye ekle
-    DataStore.Destinations.Add(newDestination);
+    db.Destinations.Add(newDestination);
+    await db.SaveChangesAsync();
 
-    // Güncellenmiş şehir listesini döndür
-    var cities = DataStore.Destinations
+    var cities = await db.Destinations
         .Select(d => d.Name)
         .Distinct()
-        .OrderBy(name => name) // Şehirleri alfabetik sıraya göre sırala
-        .ToList();
+        .OrderBy(name => name)
+        .ToListAsync();
 
     return Results.Ok(new { Message = "City added successfully.", Cities = cities });
 })
