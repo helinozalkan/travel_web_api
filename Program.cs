@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<TravelDbContext>(options =>
     options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
 
-// Register the DestinationService
+// Register the Repository and Service
+builder.Services.AddScoped<IDestinationRepository, DestinationRepository>();
 builder.Services.AddScoped<DestinationService>();
 
 // CORS configuration
@@ -44,7 +45,7 @@ app.UseCors("AllowAll");
 // API endpoints
 app.MapGet("/travel/{name}/{language}", async (string name, string language, DestinationService destinationService) =>
 {
-    var destination = destinationService.GetDestinationByName(name);
+    var destination = await destinationService.GetDestinationByNameAsync(name);
 
     if (destination == null)
     {
@@ -68,20 +69,16 @@ app.MapGet("/travel/{name}/{language}", async (string name, string language, Des
 .WithName("GetDestination")
 .WithOpenApi();
 
-app.MapGet("/cities", async (TravelDbContext db) =>
+app.MapGet("/cities", async (DestinationService destinationService) =>
 {
-    var cities = await db.Destinations
-        .Select(d => d.Name)
-        .Distinct()
-        .OrderBy(name => name)
-        .ToListAsync();
+    var cities = await destinationService.GetAllCitiesAsync();
 
     return Results.Ok(cities);
 })
 .WithName("GetCities")
 .WithOpenApi();
 
-app.MapPost("/destinations", async ([FromBody] Destination newDestination, TravelDbContext db) =>
+app.MapPost("/destinations", async ([FromBody] Destination newDestination, DestinationService destinationService) =>
 {
     if (string.IsNullOrWhiteSpace(newDestination.Name))
     {
@@ -104,19 +101,14 @@ app.MapPost("/destinations", async ([FromBody] Destination newDestination, Trave
         return Results.BadRequest(new { Message = "Local dishes are required." });
     }
 
-    if (await db.Destinations.AnyAsync(d => d.Name.ToLower() == newDestination.Name.ToLower()))
+    if (await destinationService.DestinationExistsAsync(newDestination.Name))
     {
         return Results.BadRequest(new { Message = "Eklemeye çalıştığınız şehir zaten listede mevcut." });
     }
 
-    db.Destinations.Add(newDestination);
-    await db.SaveChangesAsync();
+    await destinationService.AddDestinationAsync(newDestination);
 
-    var cities = await db.Destinations
-        .Select(d => d.Name)
-        .Distinct()
-        .OrderBy(name => name)
-        .ToListAsync();
+    var cities = await destinationService.GetAllCitiesAsync();
 
     return Results.Ok(new { Message = "City added successfully.", Cities = cities });
 })

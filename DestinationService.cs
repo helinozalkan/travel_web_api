@@ -1,24 +1,35 @@
-using Microsoft.EntityFrameworkCore;
 using api_my_web.Models;
+using System.Threading.Tasks;
 
 namespace api_my_web.Data
 {
     public class DestinationService
     {
-        private readonly TravelDbContext _context;
+        private readonly IDestinationRepository _destinationRepository;
 
-        public DestinationService(TravelDbContext context)
+        public DestinationService(IDestinationRepository destinationRepository)
         {
-            _context = context;
+            _destinationRepository = destinationRepository;
         }
 
-        public Destination GetDestinationByName(string name)
+        public async Task<Destination> GetDestinationByNameAsync(string name)
         {
-            var destination = _context.Destinations
-                .Where(d => d.Name.ToLower() == name.ToLower())
-                .FirstOrDefault();
+            return await _destinationRepository.GetDestinationByNameAsync(name);
+        }
 
-            return destination;
+        public async Task<List<string>> GetAllCitiesAsync()
+        {
+            return await _destinationRepository.GetAllCitiesAsync();
+        }
+
+        public async Task AddDestinationAsync(Destination destination)
+        {
+            await _destinationRepository.AddDestinationAsync(destination);
+        }
+
+        public async Task<bool> DestinationExistsAsync(string name)
+        {
+            return await _destinationRepository.DestinationExistsAsync(name);
         }
     }
 }
