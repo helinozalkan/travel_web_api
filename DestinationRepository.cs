@@ -15,13 +15,15 @@ namespace api_my_web.Data
             _context = context;
         }
 
-        public async Task<Destination> GetDestinationByNameAsync(string name)
+        // Dönüş türünü Task<Destination?> olarak güncelledik
+        public async Task<Destination?> GetDestinationByNameAsync(string name)
         {
             return await _context.Destinations
                 .Where(d => d.Name.ToLower() == name.ToLower())
                 .FirstOrDefaultAsync();
         }
 
+        // Dönüş türü zaten List<string> olduğu için bu metotta değişiklik yapmaya gerek yok
         public async Task<List<string>> GetAllCitiesAsync()
         {
             return await _context.Destinations
@@ -43,21 +45,20 @@ namespace api_my_web.Data
                 .AnyAsync(d => d.Name.ToLower() == name.ToLower());
         }
 
-
+        // Bu metodun dönüş türü zaten Task olduğu için bu metotta da değişiklik yapmaya gerek yok
         public async Task DeleteDestinationAsync(string name)
-{
-    // Verilen isimle eşleşen destinasyonu bulur.
-    var destination = await _context.Destinations
-        .Where(d => d.Name.ToLower() == name.ToLower())
-        .FirstOrDefaultAsync();
+        {
+            // Verilen isimle eşleşen destinasyonu bulur.
+            var destination = await _context.Destinations
+                .Where(d => d.Name.ToLower() == name.ToLower())
+                .FirstOrDefaultAsync();
 
-    // Eğer destinasyon bulunursa, siler.
-    if (destination != null)
-    {
-        _context.Destinations.Remove(destination);
-        await _context.SaveChangesAsync();
-    }
-}
-
+            // Eğer destinasyon bulunursa, siler.
+            if (destination != null)
+            {
+                _context.Destinations.Remove(destination);
+                await _context.SaveChangesAsync();
+            }
+        }
     }
 }

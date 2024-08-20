@@ -1,20 +1,25 @@
 using api_my_web.Models;
 using api_my_web.Data;
-
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.SqlServer;
-
 using Microsoft.AspNetCore.Mvc;
 
+// Top-level statements (üst düzey ifadeler)
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure DbContext
 builder.Services.AddDbContext<TravelDbContext>(options =>
     options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
 
-// // Repository ve Service katmanlarını bağımlılık olarak ekleme
+// Repository ve Service katmanlarını bağımlılık olarak ekleme
 builder.Services.AddScoped<IDestinationRepository, DestinationRepository>();
 builder.Services.AddScoped<DestinationService>();
+
+// FluentValidation'ı konfigüre etme
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<DestinationValidator>();
 
 // CORS configuration
 builder.Services.AddCors(options =>
@@ -78,32 +83,18 @@ app.MapGet("/cities", async (DestinationService destinationService) =>
 .WithName("GetCities")
 .WithOpenApi();
 
-app.MapPost("/destinations", async ([FromBody] Destination newDestination, DestinationService destinationService) =>
+app.MapPost("/destinations", async ([FromBody] Destination newDestination, DestinationService destinationService, IValidator<Destination> validator) =>
 {
-    if (string.IsNullOrWhiteSpace(newDestination.Name))
+    var validationResult = await validator.ValidateAsync(newDestination);
+
+    if (!validationResult.IsValid)
     {
-        return Results.BadRequest(new { Message = "Name is required." });
-    }
-    if (newDestination.Name.Length > 20)
-    {
-        return Results.BadRequest(new { Message = "Name cannot be more than 20 characters." });
-    }
-    if (string.IsNullOrWhiteSpace(newDestination.DescriptionEnglish))
-    {
-        return Results.BadRequest(new { Message = "Description is required." });
-    }
-    if (newDestination.AttractionsEnglish == null || !newDestination.AttractionsEnglish.Any())
-    {
-        return Results.BadRequest(new { Message = "Attractions are required." });
-    }
-    if (newDestination.LocalDishesEnglish == null || !newDestination.LocalDishesEnglish.Any())
-    {
-        return Results.BadRequest(new { Message = "Local dishes are required." });
+        return Results.BadRequest(new { Message = string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)) });
     }
 
     if (await destinationService.DestinationExistsAsync(newDestination.Name))
     {
-        return Results.BadRequest(new { Message = "Eklemeye çalıştığınız şehir zaten listede mevcut." });
+        return Results.BadRequest(new { Message = "The city you are trying to add already exists." });
     }
 
     await destinationService.AddDestinationAsync(newDestination);
@@ -115,16 +106,13 @@ app.MapPost("/destinations", async ([FromBody] Destination newDestination, Desti
 .WithName("AddDestination")
 .WithOpenApi();
 
-
 app.MapDelete("/destinations/{name}", async (string name, DestinationService destinationService) =>
 {
-    // Şehir var mı kontrol eder.
     if (!await destinationService.DestinationExistsAsync(name))
     {
         return Results.NotFound(new { Message = "Destination not found." });
     }
 
-    // Şehri siler.
     await destinationService.DeleteDestinationAsync(name);
 
     return Results.Ok(new { Message = "Destination deleted successfully." });
@@ -132,5 +120,26 @@ app.MapDelete("/destinations/{name}", async (string name, DestinationService des
 .WithName("DeleteDestination")
 .WithOpenApi();
 
-
 app.Run();
+
+// Validator tanımlaması
+public class DestinationValidator : AbstractValidator<Destination>
+{
+    public DestinationValidator()
+    {
+        RuleFor(d => d.Name)
+            .NotEmpty().WithMessage("Name is required.")
+            .MaximumLength(20).WithMessage("Name cannot be more than 20 characters.");
+
+        RuleFor(d => d.DescriptionEnglish)
+            .NotEmpty().WithMessage("Description is required.");
+
+        RuleFor(d => d.AttractionsEnglish)
+            .NotNull().WithMessage("Attractions are required.")
+            .NotEmpty().WithMessage("Attractions cannot be empty.");
+
+        RuleFor(d => d.LocalDishesEnglish)
+            .NotNull().WithMessage("Local dishes are required.")
+            .NotEmpty().WithMessage("Local dishes cannot be empty.");
+    }
+}

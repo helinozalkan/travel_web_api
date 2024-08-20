@@ -136,3 +136,6 @@ C:\api_my_web\obj\Debug\net8.0\refint\api_my_web.dll
 C:\api_my_web\obj\Debug\net8.0\api_my_web.pdb
 C:\api_my_web\obj\Debug\net8.0\api_my_web.genruntimeconfig.cache
 C:\api_my_web\obj\Debug\net8.0\ref\api_my_web.dll
+C:\api_my_web\bin\Debug\net8.0\FluentValidation.dll
+C:\api_my_web\bin\Debug\net8.0\FluentValidation.AspNetCore.dll
+C:\api_my_web\bin\Debug\net8.0\FluentValidation.DependencyInjectionExtensions.dll

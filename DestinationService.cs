@@ -1,4 +1,5 @@
 using api_my_web.Models;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace api_my_web.Data
@@ -12,7 +13,7 @@ namespace api_my_web.Data
             _destinationRepository = destinationRepository;
         }
 
-        public async Task<Destination> GetDestinationByNameAsync(string name)
+        public async Task<Destination?> GetDestinationByNameAsync(string name)
         {
             return await _destinationRepository.GetDestinationByNameAsync(name);
         }
@@ -36,6 +37,5 @@ namespace api_my_web.Data
         {
             await _destinationRepository.DeleteDestinationAsync(name);
         }
-
     }
 }
