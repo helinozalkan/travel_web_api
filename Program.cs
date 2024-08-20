@@ -3,7 +3,6 @@ using api_my_web.Data;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.SqlServer;
 using Microsoft.AspNetCore.Mvc;
 
 // Top-level statements (üst düzey ifadeler)
@@ -19,7 +18,7 @@ builder.Services.AddScoped<DestinationService>();
 
 // FluentValidation'ı konfigüre etme
 builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddValidatorsFromAssemblyContaining<DestinationValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<DestinationDTOValidator>();
 
 // CORS configuration
 builder.Services.AddCors(options =>
@@ -83,14 +82,22 @@ app.MapGet("/cities", async (DestinationService destinationService) =>
 .WithName("GetCities")
 .WithOpenApi();
 
-app.MapPost("/destinations", async ([FromBody] Destination newDestination, DestinationService destinationService, IValidator<Destination> validator) =>
+app.MapPost("/destinations", async ([FromBody] DestinationDTO newDestinationDto, DestinationService destinationService, IValidator<DestinationDTO> validator) =>
 {
-    var validationResult = await validator.ValidateAsync(newDestination);
+    var validationResult = await validator.ValidateAsync(newDestinationDto);
 
     if (!validationResult.IsValid)
     {
         return Results.BadRequest(new { Message = string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage)) });
     }
+
+    var newDestination = new Destination
+    {
+        Name = newDestinationDto.Name,
+        DescriptionEnglish = newDestinationDto.DescriptionEnglish,
+        AttractionsEnglish = newDestinationDto.AttractionsEnglish,
+        LocalDishesEnglish = newDestinationDto.LocalDishesEnglish
+    };
 
     if (await destinationService.DestinationExistsAsync(newDestination.Name))
     {
@@ -121,25 +128,3 @@ app.MapDelete("/destinations/{name}", async (string name, DestinationService des
 .WithOpenApi();
 
 app.Run();
-
-// Validator tanımlaması
-public class DestinationValidator : AbstractValidator<Destination>
-{
-    public DestinationValidator()
-    {
-        RuleFor(d => d.Name)
-            .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(20).WithMessage("Name cannot be more than 20 characters.");
-
-        RuleFor(d => d.DescriptionEnglish)
-            .NotEmpty().WithMessage("Description is required.");
-
-        RuleFor(d => d.AttractionsEnglish)
-            .NotNull().WithMessage("Attractions are required.")
-            .NotEmpty().WithMessage("Attractions cannot be empty.");
-
-        RuleFor(d => d.LocalDishesEnglish)
-            .NotNull().WithMessage("Local dishes are required.")
-            .NotEmpty().WithMessage("Local dishes cannot be empty.");
-    }
-}
