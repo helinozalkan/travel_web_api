@@ -42,5 +42,22 @@ namespace api_my_web.Data
             return await _context.Destinations
                 .AnyAsync(d => d.Name.ToLower() == name.ToLower());
         }
+
+
+        public async Task DeleteDestinationAsync(string name)
+{
+    // Verilen isimle eşleşen destinasyonu bulur.
+    var destination = await _context.Destinations
+        .Where(d => d.Name.ToLower() == name.ToLower())
+        .FirstOrDefaultAsync();
+
+    // Eğer destinasyon bulunursa, siler.
+    if (destination != null)
+    {
+        _context.Destinations.Remove(destination);
+        await _context.SaveChangesAsync();
+    }
+}
+
     }
 }

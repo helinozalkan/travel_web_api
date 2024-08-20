@@ -31,5 +31,11 @@ namespace api_my_web.Data
         {
             return await _destinationRepository.DestinationExistsAsync(name);
         }
+
+        public async Task DeleteDestinationAsync(string name)
+        {
+            await _destinationRepository.DeleteDestinationAsync(name);
+        }
+
     }
 }

@@ -12,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<TravelDbContext>(options =>
     options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
 
-// Register the Repository and Service
+// // Repository ve Service katmanlarını bağımlılık olarak ekleme
 builder.Services.AddScoped<IDestinationRepository, DestinationRepository>();
 builder.Services.AddScoped<DestinationService>();
 
@@ -114,5 +114,23 @@ app.MapPost("/destinations", async ([FromBody] Destination newDestination, Desti
 })
 .WithName("AddDestination")
 .WithOpenApi();
+
+
+app.MapDelete("/destinations/{name}", async (string name, DestinationService destinationService) =>
+{
+    // Şehir var mı kontrol eder.
+    if (!await destinationService.DestinationExistsAsync(name))
+    {
+        return Results.NotFound(new { Message = "Destination not found." });
+    }
+
+    // Şehri siler.
+    await destinationService.DeleteDestinationAsync(name);
+
+    return Results.Ok(new { Message = "Destination deleted successfully." });
+})
+.WithName("DeleteDestination")
+.WithOpenApi();
+
 
 app.Run();
