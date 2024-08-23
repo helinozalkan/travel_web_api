@@ -4,23 +4,27 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using StackExchange.Redis;
+using System.Text.Json;
 
-// Top-level statements (üst düzey ifadeler)
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure DbContext
+// SQL Server için DbContext yapılandırması
 builder.Services.AddDbContext<TravelDbContext>(options =>
     options.UseSqlServer("Server=localhost,1433;Database=TravelDb;User Id=SA;Password=Password1;TrustServerCertificate=True;"));
 
-// Repository ve Service katmanlarını bağımlılık olarak ekleme
+// Redis Bağlantısı Yapılandırması
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect("localhost:6379"));
+
+// Repository ve Servis Katmanı Bağımlılıkları
 builder.Services.AddScoped<IDestinationRepository, DestinationRepository>();
 builder.Services.AddScoped<DestinationService>();
 
-// FluentValidation'ı konfigüre etme
+// FluentValidation yapılandırması
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<DestinationDTOValidator>();
 
-// CORS configuration
+// CORS yapılandırması: Tüm kökenlere, yöntemlere ve başlıklara izin ver
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -35,8 +39,11 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+
+
 var app = builder.Build();
 
+// Geliştirme ortamında Swagger UI'yi etkinleştir
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -46,12 +53,51 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 
-// API endpoints
-app.MapGet("/travel/{name}/{language}", async (string name, string language, DestinationService destinationService) =>
+// Cache veya veritabanından veri alma yardımcı metodu
+async Task<T?> GetFromCacheOrDb<T>(string cacheKey, Func<Task<T?>> dbQuery, IConnectionMultiplexer redis) where T : class
 {
-    var destination = await destinationService.GetDestinationByNameAsync(name);
+    var redisDb = redis.GetDatabase();
+    var cachedData = await redisDb.StringGetAsync(cacheKey.ToLower()); // destination: prefix'i kaldırıldı
 
-    if (destination == null)
+    if (!cachedData.IsNullOrEmpty)
+    {
+        return JsonSerializer.Deserialize<T>(cachedData);
+    }
+
+    var dbData = await dbQuery();
+    if (dbData != null)
+    {
+        await redisDb.StringSetAsync(cacheKey.ToLower(), JsonSerializer.Serialize(dbData)); // destination: prefix'i kaldırıldı
+    }
+    return dbData;
+}
+
+
+// API Endpoint'i: İsim ve dil ile seyahat detaylarını getir
+app.MapGet("/travel/{name}/{language}", async (string name, string language, DestinationService destinationService, IConnectionMultiplexer redis) =>
+{
+    var redisDb = redis.GetDatabase();
+    var cacheKey = name.ToLower();
+    var cachedData = await redisDb.StringGetAsync(cacheKey);
+
+    DestinationDTO? destinationDto = null;
+    bool fromCache = false;
+
+    if (!cachedData.IsNullOrEmpty)
+    {
+        destinationDto = JsonSerializer.Deserialize<DestinationDTO>(cachedData);
+        fromCache = true;
+    }
+    else
+    {
+        destinationDto = await destinationService.GetDestinationByNameAsync(name, language);
+        if (destinationDto != null)
+        {
+            await redisDb.StringSetAsync(cacheKey, JsonSerializer.Serialize(destinationDto));
+        }
+    }
+
+    if (destinationDto == null)
     {
         return Results.NotFound(new { Message = "Destination not found." });
     }
@@ -61,11 +107,12 @@ app.MapGet("/travel/{name}/{language}", async (string name, string language, Des
 
     var response = new
     {
-        Name = destination.Name,
-        Description = language.ToLower() == "en" ? destination.DescriptionEnglish : destination.DescriptionEnglish,
-        Attractions = language.ToLower() == "en" ? destination.AttractionsEnglish : destination.AttractionsEnglish,
-        LocalDishes = language.ToLower() == "en" ? destination.LocalDishesEnglish : destination.LocalDishesEnglish,
-        MinimumCost = $"${minCost}"
+        Name = destinationDto.Name,
+        Description = destinationDto.DescriptionEnglish,
+        Attractions = destinationDto.AttractionsEnglish,
+        LocalDishes = destinationDto.LocalDishesEnglish,
+        MinimumCost = $"${minCost}",
+        DataSource = fromCache ? "Redis" : "Database"
     };
 
     return Results.Ok(response);
@@ -73,15 +120,25 @@ app.MapGet("/travel/{name}/{language}", async (string name, string language, Des
 .WithName("GetDestination")
 .WithOpenApi();
 
-app.MapGet("/cities", async (DestinationService destinationService) =>
+
+
+// API Endpoint'i: Şehirlerin listesini getir
+app.MapGet("/cities", async (DestinationService destinationService, IConnectionMultiplexer redis) =>
 {
-    var cities = await destinationService.GetAllCitiesAsync();
+    var cacheKey = "cities";
+    var cities = await GetFromCacheOrDb<List<string>>(cacheKey, () => destinationService.GetAllCitiesAsync(), redis);
+
+    if (cities == null)
+    {
+        return Results.NotFound(new { Message = "Cities not found." });
+    }
 
     return Results.Ok(cities);
 })
 .WithName("GetCities")
 .WithOpenApi();
 
+// API Endpoint'i: Yeni bir destinasyon ekle veya güncelle
 app.MapPost("/destinations", async ([FromBody] DestinationDTO newDestinationDto, DestinationService destinationService, IValidator<DestinationDTO> validator) =>
 {
     var validationResult = await validator.ValidateAsync(newDestinationDto);
@@ -99,20 +156,14 @@ app.MapPost("/destinations", async ([FromBody] DestinationDTO newDestinationDto,
         LocalDishesEnglish = newDestinationDto.LocalDishesEnglish
     };
 
-    if (await destinationService.DestinationExistsAsync(newDestination.Name))
-    {
-        return Results.BadRequest(new { Message = "The city you are trying to add already exists." });
-    }
+    await destinationService.AddOrUpdateDestinationAsync(newDestination);
 
-    await destinationService.AddDestinationAsync(newDestination);
-
-    var cities = await destinationService.GetAllCitiesAsync();
-
-    return Results.Ok(new { Message = "City added successfully.", Cities = cities });
+    return Results.Ok(new { Message = "City added/updated successfully." });
 })
-.WithName("AddDestination")
+.WithName("AddOrUpdateDestination")
 .WithOpenApi();
 
+// API Endpoint'i: Bir destinasyonu sil
 app.MapDelete("/destinations/{name}", async (string name, DestinationService destinationService) =>
 {
     if (!await destinationService.DestinationExistsAsync(name))

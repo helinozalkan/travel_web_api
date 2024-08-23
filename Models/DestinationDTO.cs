@@ -18,6 +18,7 @@ namespace api_my_web.Models
             RuleFor(d => d.Name)
                 .NotEmpty().WithMessage("Name is required.")
                 .MaximumLength(20).WithMessage("Name cannot be more than 20 characters.");
+                
 
             RuleFor(d => d.DescriptionEnglish)
                 .NotEmpty().WithMessage("Description is required.");

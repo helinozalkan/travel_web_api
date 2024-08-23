@@ -139,3 +139,5 @@ C:\api_my_web\obj\Debug\net8.0\ref\api_my_web.dll
 C:\api_my_web\bin\Debug\net8.0\FluentValidation.dll
 C:\api_my_web\bin\Debug\net8.0\FluentValidation.AspNetCore.dll
 C:\api_my_web\bin\Debug\net8.0\FluentValidation.DependencyInjectionExtensions.dll
+C:\api_my_web\bin\Debug\net8.0\Pipelines.Sockets.Unofficial.dll
+C:\api_my_web\bin\Debug\net8.0\StackExchange.Redis.dll

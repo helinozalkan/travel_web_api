@@ -15,7 +15,7 @@ namespace api_my_web.Data
             _context = context;
         }
 
-        // Dönüş türünü Task<Destination?> olarak güncelledik
+        // Şehir adını küçük harfe çevirerek arama yapar ve varsa ilk eşleşeni döndürür
         public async Task<Destination?> GetDestinationByNameAsync(string name)
         {
             return await _context.Destinations
@@ -23,41 +23,70 @@ namespace api_my_web.Data
                 .FirstOrDefaultAsync();
         }
 
-        // Dönüş türü zaten List<string> olduğu için bu metotta değişiklik yapmaya gerek yok
+        // Şehirlerin listesini alır, sıralar ve döndürür
         public async Task<List<string>> GetAllCitiesAsync()
         {
             return await _context.Destinations
                 .Select(d => d.Name)
                 .Distinct()
-                .OrderBy(name => name)
+                .OrderBy(name => name) // Şehir isimlerini sıralar
                 .ToListAsync();
         }
 
+        // Yeni bir şehir ekler ve değişiklikleri veritabanına kaydeder
         public async Task AddDestinationAsync(Destination destination)
         {
             _context.Destinations.Add(destination);
             await _context.SaveChangesAsync();
         }
 
+        // Belirtilen şehir adının veritabanında var olup olmadığını kontrol eder
         public async Task<bool> DestinationExistsAsync(string name)
         {
             return await _context.Destinations
                 .AnyAsync(d => d.Name.ToLower() == name.ToLower());
         }
 
-        // Bu metodun dönüş türü zaten Task olduğu için bu metotta da değişiklik yapmaya gerek yok
+        // Verilen isimle eşleşen destinasyonu bulur ve siler
+    public async Task RemoveDestinationAsync(Destination destination)
+    {
+        _context.Destinations.Remove(destination);
+        await _context.SaveChangesAsync();
+    }
+
+        // Verilen isimle eşleşen destinasyonu bulur ve siler
         public async Task DeleteDestinationAsync(string name)
         {
-            // Verilen isimle eşleşen destinasyonu bulur.
             var destination = await _context.Destinations
                 .Where(d => d.Name.ToLower() == name.ToLower())
                 .FirstOrDefaultAsync();
 
-            // Eğer destinasyon bulunursa, siler.
             if (destination != null)
             {
                 _context.Destinations.Remove(destination);
                 await _context.SaveChangesAsync();
+            }
+        }
+
+        // Destinasyon verilerini günceller
+        public async Task UpdateDestinationAsync(Destination destination)
+        {
+            var existingDestination = await _context.Destinations
+                .Where(d => d.Name.ToLower() == destination.Name.ToLower())
+                .FirstOrDefaultAsync();
+
+            if (existingDestination != null)
+            {
+                // Burada mevcut destinasyonu güncelleriz
+                existingDestination.DescriptionEnglish = destination.DescriptionEnglish;
+                existingDestination.AttractionsEnglish = destination.AttractionsEnglish;
+                existingDestination.LocalDishesEnglish = destination.LocalDishesEnglish;
+
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                throw new KeyNotFoundException("Destination not found");
             }
         }
     }
