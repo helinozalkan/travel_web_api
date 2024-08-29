@@ -10,8 +10,8 @@ public interface IDestinationRepository
     Task<List<string>> GetAllCitiesAsync();
     Task AddDestinationAsync(Destination destination);
     Task UpdateDestinationAsync(Destination destination);
-    Task<bool> DestinationExistsAsync(string name); // Bu metodu ekleyin
-    Task RemoveDestinationAsync(Destination destination); // Yeni metod
+    Task<bool> DestinationExistsAsync(string name); 
+    Task RemoveDestinationAsync(Destination destination); 
 
     Task DeleteDestinationAsync(string name);
 }

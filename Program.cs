@@ -24,7 +24,7 @@ builder.Services.AddScoped<DestinationService>();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<DestinationDTOValidator>();
 
-// CORS yapılandırması: Tüm kökenlere, yöntemlere ve başlıklara izin ver
+// CORS yapılandırması
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -43,7 +43,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Geliştirme ortamında Swagger UI'yi etkinleştir
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
